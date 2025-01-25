@@ -41,4 +41,6 @@ confusionMatrix(predictions_rf, testing_expression$class)
 
 probabilities_rf <- predict(rfModel, newdata = testing_expression_rf, type = "prob")
 
-
+# Calcular el F1-Score
+f1_score <- F1_Score(y_pred = predictions_rf, y_true = testing_expression_rf$class, positive = NULL)
+print(f1_score)
