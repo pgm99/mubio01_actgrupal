@@ -102,31 +102,31 @@ sum(zero_var_cols)
 #### Eliminar columnas constantes
 expression <- expression[, !zero_var_cols]
 #### Escalar el dataset
-expression <- scale(expression)
+expressionescalado <- scale(expression)
 #### Verificar si hay valores faltantes
 sum(is.na(expression))
 
 
 #####CÓMO SABER CUANTOS CENTROIDES PONER
 ##### n optimo de clusters
-fviz_nbclust(expression, kmeans, method = "wss") +
+fviz_nbclust(expressionescalado, kmeans, method = "wss") +
   ggtitle("Optimal number of clusters", subtitle = "") +
   theme_classic()
 
 #####Vemos que el número óptimo es 3
 
-kmeans.result <- kmeans(expression, centers = 3, iter.max = 100, nstart = 25) 
+kmeans.result <- kmeans(expressionescalado, centers = 3, iter.max = 100, nstart = 25) 
 
 ####Representación
-fviz_cluster(kmeans.result, expression, xlab = '', ylab = '') +
+fviz_cluster(kmeans.result, expressionescalado, xlab = '', ylab = '') +
   ggtitle("Cluster plot, centers = 3", subtitle = "") +
   theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, margin = margin(b = -10)))
+  theme(plot.title = element_text(hjust = 0.5))
 
 ### 2) Clustering jerarquico divisivo
 
 #### Implementación del clustering divisivo
-diana_euclidean <- diana(expression, metric = "euclidean", stand = FALSE) 
+diana_euclidean <- diana(expressionescalado, metric = "euclidean", stand = FALSE) 
 
 colors <- rainbow(5)
 clust_diana_euclidean <- fviz_dend(diana_euclidean, 
@@ -150,9 +150,21 @@ Se ha seleccionado Regularized Discriminant Analysis (RDA) como modelo de clasif
 
 A diferencia de otros métodos, RDA permite adaptar la matriz de covarianza mediante dos parámetros (gamma y lambda), lo que evita problemas de sobreajuste y mejora la capacidad del modelo para distinguir entre clases cuando los datos son complejos.
 ```{r}
-# División en datos de entrenamiento y prueba (80%-20%)
+expression <- read.csv(file = paste0(path,"/gene_expression.csv"), sep = ";", header = FALSE)
+genes <- read.csv(file = paste0(path,"/column_names.txt"), header = FALSE)
+samples <- read.csv(file = paste0(path,"/classes.csv"), sep = ";", header = FALSE)
+
+colnames(expression) <- genes$V1
+expression$class <- samples$V2
+expression <- expression[, c(501, 1:500)]  # Mover class a la primera columna
+rownames(expression) <- samples$V1
+expression$class <- as.factor(expression$class)
+
+expression <- expression %>%
+  mutate_if(is.numeric, ~ifelse(is.na(.), mean(., na.rm = TRUE), .))
+
 set.seed(123)
-index <- createDataPartition(expression$class, p = 0.8, list = FALSE)
+index <- createDataPartition(expression$class, p = 0.7, list = FALSE)
 train_data <- expression[index, ]
 test_data <- expression[-index, ]
 
@@ -239,7 +251,7 @@ conf_matrix <- confusionMatrix(predictions_knn, test_expression$class)
 print(conf_matrix)
 ```
 
-## Modelo RDA
+## Random forest
 
 ```{r}
 #Dividir el dataset en training y testing
@@ -258,6 +270,7 @@ rfModel <-train(class ~.,
                 trControl = trainControl(method = "cv", number = 10),
                 preProcess = c("center", "scale"),
                 tuneLength = 10
+)
 
 varImp(rfModel)
 varImpPlot(rfModel$finalModel)
@@ -265,7 +278,7 @@ varImpPlot(rfModel$finalModel)
 predictions_rf <- predict(rfModel, newdata = testing_expression_rf, type = "raw") 
 predictions_rf
 
-confusionMatrix(predictions_rf, testing_expression$class)
+confusionMatrix(predictions_rf, testing_expression_rf$class)
 
 probabilities_rf <- predict(rfModel, newdata = testing_expression_rf, type = "prob")
 
@@ -273,3 +286,5 @@ probabilities_rf <- predict(rfModel, newdata = testing_expression_rf, type = "pr
 f1_score <- F1_Score(y_pred = predictions_rf, y_true = testing_expression_rf$class, positive = NULL)
 print(f1_score)
 ```
+
+
