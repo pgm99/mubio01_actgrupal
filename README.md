@@ -7,4 +7,9 @@ Esta actividad consiste en implemenar técnicas de aprendizaje supervisado y no 
 El dataset de trabajo esta formado por un total de 800 pacientes, los cuales se han classificado en la variable class y se ha medido la expresión génica de 500 genes diferentes. 
 La variable categorica del dataset "class" esta formada por las siguientes categorias: "CHC", "CGC", "CFB", "AGH" y "HPB".
 
+En el repositorio puedes encontrar un primer script para preprocesar y limpiar los datos. Para el análisis de los datos se encuentran divididos en métodos supervisados y métodos no supervisados
+
+
+
+
 Que añadimos mas? podriams poner como esta estrucutrado, por ejemplo explicando las carpetas y que hay en ellas?
