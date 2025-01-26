@@ -1,0 +1,74 @@
+```{r}
+# División en datos de entrenamiento y prueba (70%-30%)
+set.seed(123)
+index <- createDataPartition(expression$class, p = 0.7, list = FALSE)
+train_data <- expression[index, ]
+test_data <- expression[-index, ]
+
+# Eliminar variables constantes antes de entrenar
+train_data <- train_data %>% select_if(~ !is.factor(.) && var(.) > 0)
+
+# Asegurar que `test_data` solo tenga las mismas columnas que `train_data`
+test_data <- test_data %>% select(all_of(colnames(train_data)))
+
+# Verificar que `class` sigue presente en los datos
+if (!"class" %in% colnames(train_data)) {
+  train_data$class <- expression$class[index]
+}
+if (!"class" %in% colnames(test_data)) {
+  test_data$class <- expression$class[-index]
+}
+
+# Convertir `train_data` en `data.frame()` con `class` como factor
+train_data <- as.data.frame(train_data)
+test_data <- as.data.frame(test_data)
+
+# Verificar estructura de `train_data` antes de entrenar
+print("Estructura de train_data:")
+print(str(train_data))
+
+# Asegurar que los nombres de columnas sean válidos
+colnames(train_data) <- make.names(colnames(train_data), unique = TRUE)
+
+# Asegurar que class es un factor
+train_data$class <- as.factor(train_data$class)
+
+# Entrenar el modelo RDA
+rda_model <- rda(class ~ ., data = train_data, gamma = 0.1, lambda = 0.5)
+
+# Asegurar que los nombres de columnas sean válidos y coincidan en ambos conjuntos
+colnames(train_data) <- make.names(colnames(train_data), unique = TRUE)
+colnames(test_data) <- make.names(colnames(test_data), unique = TRUE)
+
+# Verificar si hay diferencias en los nombres de las columnas
+print("Diferencias en columnas entre train_data y test_data después de limpiar nombres:")
+print(setdiff(colnames(train_data), colnames(test_data))) # Si hay diferencias, esto las mostrará
+
+# Hacer predicciones en los datos de prueba
+rda_predictions <- predict(rda_model, newdata = test_data)$class
+
+
+# Evaluar el modelo con matriz de confusión y métricas
+rda_conf_matrix <- confusionMatrix(rda_predictions, test_data$class)
+print(rda_conf_matrix)
+
+# Extraer métricas de evaluación
+accuracy <- rda_conf_matrix$overall["Accuracy"]
+kappa <- rda_conf_matrix$overall["Kappa"]
+f1_score <- rda_conf_matrix$byClass["F1"]
+
+# Mostrar los resultados finales
+results <- data.frame(Model = "RDA",
+                      Accuracy = accuracy,
+                      Kappa = kappa,
+                      F1_Score = f1_score)
+print(results)
+
+```
+Se ha seleccionado Regularized Discriminant Analysis (RDA) como modelo de clasificación debido a su capacidad para manejar datos con muchas variables y alta colinealidad, como ocurre en la expresión genética. RDA combina lo mejor de los enfoques lineales y cuadráticos, ajustando la regularización para mejorar la estabilidad y precisión en la clasificación.
+
+A diferencia de otros métodos, RDA permite adaptar la matriz de covarianza mediante dos parámetros (gamma y lambda), lo que evita problemas de sobreajuste y mejora la capacidad del modelo para distinguir entre clases cuando los datos son complejos.
+
+El modelo ha mostrado una precisión del 92.44% y una alta concordancia entre predicciones y valores reales (Kappa = 0.9014). Aunque el rendimiento es sólido en la mayoría de las clases, se ha observado que la categoría HPB presenta más errores de clasificación, lo que podría mejorarse con ajustes en los hiperparámetros o técnicas de balanceo.
+
+En general, RDA ha sido elegido por su capacidad para ofrecer un equilibrio entre modelos simples y flexibles, logrando buenos resultados en este conjunto de datos.
