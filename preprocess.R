@@ -1,7 +1,7 @@
 library(dplyr)
 
 #Cambiar el path al que sea
-path <- "/home/vant/UNIR/algoritmos_IA/actividades/act3/data/"
+path <- "/home/vant/UNIR/mubio01_actgrupal/data/"
 
 expression <- read.csv(file = paste0(path,"gene_expression.csv"), sep = ";", header = FALSE)
 genes <- read.csv(file = paste0(path,"column_names.txt"), header = FALSE)
