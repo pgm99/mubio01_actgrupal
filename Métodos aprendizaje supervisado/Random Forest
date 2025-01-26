@@ -1,0 +1,46 @@
+Random Forest
+
+#Librerias necesarias
+library(dplyr)
+library(randomForest)
+library(caret)
+library(MLmetrics)
+
+#Eliminar los genes con varianza = 0
+
+variances <- apply(expression[, -2], 2, var)
+genes_to_remove <-which(variances==0)
+col_genes_to_remove <- colnames(expression)[genes_to_remove + 1]  # Sumar 1 porque se ha excluido la primera columna en `variances`
+expression_rf <- expression %>%
+  select(-all_of(col_genes_to_remove))
+
+#Dividir el dataset en training y testing
+
+set.seed(1995)
+train_index <- createDataPartition(expression_rf$class, p = 0.8, list = FALSE) 
+train_index
+
+training_expression_rf <- expression_rf[train_index, ]
+testing_expression_rf <- expression_rf[-train_index, ]
+
+#Random forest
+rfModel <-train(class ~.,
+                data = training_expression_rf,
+                method = "rf",
+                trControl = trainControl(method = "cv", number = 10),
+                preProcess = c("center", "scale"),
+                tuneLength = 10
+
+varImp(rfModel)
+varImpPlot(rfModel$finalModel)
+
+predictions_rf <- predict(rfModel, newdata = testing_expression_rf, type = "raw") 
+predictions_rf
+
+confusionMatrix(predictions_rf, testing_expression$class)
+
+probabilities_rf <- predict(rfModel, newdata = testing_expression_rf, type = "prob")
+
+# Calcular el F1-Score
+f1_score <- F1_Score(y_pred = predictions_rf, y_true = testing_expression_rf$class, positive = NULL)
+print(f1_score)

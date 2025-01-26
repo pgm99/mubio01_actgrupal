@@ -1,0 +1,43 @@
+#Preprocesado
+colnames(expression) <- genes$V1
+expression$class <- samples$V2
+expression<-expression[,c(501, 1:500)] 
+rownames(expression) <- samples$V1
+expression$class <- as.factor(expression$class)
+
+#Eliminar los genes con varianza = 0
+variances <- apply(expression[, -2], 2, var)
+genes_to_remove <-which(variances==0)
+col_genes_to_remove <- colnames(expression)[genes_to_remove + 1]  
+expression_rf <- expression %>%
+  select(-all_of(col_genes_to_remove))
+
+
+#Dividir el conjunto de datos en entrenamiento y prueba
+set.seed(1995)
+train_index <- createDataPartition(expression_rf$class, p = 0.8, list = FALSE)
+train_expression <-expression_rf[train_index, ]
+test_expression <- expression_rf[-train_index, ]
+
+#Knn
+set.seed(1995)
+knnModel <-train(class ~.,
+                data = train_expression,
+                method = "knn",
+                trControl = trainControl(method = "cv", number = 10),
+                preProcess = c("center", "scale"),
+                tuneLength = 10)
+
+#Gráfico
+plot(knnModel)
+
+
+#Realizar predicciones en el conjunto de prueba
+predictions_knn <-predict(knnModel, newdata = test_expression)
+probabilities_knn <-predict(knnModel, newdata = test_expression, type= "prob" ) #Probablidad (necesaria para curva ROC)
+
+#Crear la matriz de confusión
+conf_matrix <- confusionMatrix(predictions_knn, test_expression$class)
+
+#Mostrar la matriz de confusión
+print(conf_matrix)
