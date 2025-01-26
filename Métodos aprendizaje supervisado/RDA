@@ -1,6 +1,6 @@
 ```{r}
 # División en datos de entrenamiento y prueba (70%-30%)
-set.seed(123)
+set.seed(100)
 index <- createDataPartition(expression$class, p = 0.7, list = FALSE)
 train_data <- expression[index, ]
 test_data <- expression[-index, ]
@@ -12,56 +12,43 @@ train_data <- train_data %>% select_if(~ !is.factor(.) && var(.) > 0)
 test_data <- test_data %>% select(all_of(colnames(train_data)))
 
 # Verificar que `class` sigue presente en los datos
-if (!"class" %in% colnames(train_data)) {
-  train_data$class <- expression$class[index]
-}
-if (!"class" %in% colnames(test_data)) {
-  test_data$class <- expression$class[-index]
-}
+train_data$class <- expression$class[index]
+test_data$class <- expression$class[-index]
 
-# Convertir `train_data` en `data.frame()` con `class` como factor
+# Convertir `train_data` y `test_data` en `data.frame()` con `class` como factor
 train_data <- as.data.frame(train_data)
 test_data <- as.data.frame(test_data)
-
-# Verificar estructura de `train_data` antes de entrenar
-print("Estructura de train_data:")
-print(str(train_data))
-
-# Asegurar que los nombres de columnas sean válidos
-colnames(train_data) <- make.names(colnames(train_data), unique = TRUE)
-
-# Asegurar que class es un factor
 train_data$class <- as.factor(train_data$class)
-
-# Entrenar el modelo RDA
-rda_model <- rda(class ~ ., data = train_data, gamma = 0.1, lambda = 0.5)
+test_data$class <- as.factor(test_data$class)
 
 # Asegurar que los nombres de columnas sean válidos y coincidan en ambos conjuntos
 colnames(train_data) <- make.names(colnames(train_data), unique = TRUE)
 colnames(test_data) <- make.names(colnames(test_data), unique = TRUE)
 
 # Verificar si hay diferencias en los nombres de las columnas
-print("Diferencias en columnas entre train_data y test_data después de limpiar nombres:")
-print(setdiff(colnames(train_data), colnames(test_data))) # Si hay diferencias, esto las mostrará
+column_differences <- setdiff(colnames(train_data), colnames(test_data))
+if (length(column_differences) > 0) {
+  print("Diferencias en columnas entre train_data y test_data después de limpiar nombres:")
+  print(column_differences)
+}
+
+# Entrenar el modelo RDA
+rda_model <- rda(class ~ ., data = train_data, gamma = 0.1, lambda = 0.5)
 
 # Hacer predicciones en los datos de prueba
 rda_predictions <- predict(rda_model, newdata = test_data)$class
-
 
 # Evaluar el modelo con matriz de confusión y métricas
 rda_conf_matrix <- confusionMatrix(rda_predictions, test_data$class)
 print(rda_conf_matrix)
 
 # Extraer métricas de evaluación
-accuracy <- rda_conf_matrix$overall["Accuracy"]
-kappa <- rda_conf_matrix$overall["Kappa"]
-f1_score <- rda_conf_matrix$byClass["F1"]
+results <- data.frame(Model = "RDA",
+                      Accuracy = rda_conf_matrix$overall["Accuracy"],
+                      Kappa = rda_conf_matrix$overall["Kappa"],
+                      F1_Score = rda_conf_matrix$byClass["F1"])
 
 # Mostrar los resultados finales
-results <- data.frame(Model = "RDA",
-                      Accuracy = accuracy,
-                      Kappa = kappa,
-                      F1_Score = f1_score)
 print(results)
 
 ```
