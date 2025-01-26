@@ -1,0 +1,66 @@
+##REALIZAMOS DOS TÉCNCIAS DE CLUSTERIZACIÓN
+
+####Para ello, necesitamos solo las columnas numéricas
+expression <- expression[sapply(expression, is.numeric)]
+
+
+
+### 1) Clustering no jerárquico con kmeans
+
+library(stats)
+library(factoextra)
+
+####Tenemos columnas donde todos los valores son iguales, lo que hace que la estandarización falle.
+
+####Por ello:
+#### Detectar columnas constantes o con varianza cero
+zero_var_cols <- sapply(expression, function(col) var(col, na.rm = TRUE) == 0)
+#### Ver cuántas columnas tienen varianza cero
+sum(zero_var_cols)
+#### Eliminar columnas constantes
+expression <- expression[, !zero_var_cols]
+#### Escalar el dataset
+expression <- scale(expression)
+#### Verificar si hay valores faltantes
+sum(is.na(expression))
+
+
+#####CÓMO SABER CUANTOS CENTROIDES PONER
+##### n optimo de clusters
+fviz_nbclust(expression, kmeans, method = "wss") +
+  ggtitle("Optimal number of clusters", subtitle = "") +
+  theme_classic()
+
+#####Vemos que el número óptimo es 3
+
+kmeans.result <- kmeans(expression, centers = 3, iter.max = 100, nstart = 25) 
+
+####Representación
+fviz_cluster(kmeans.result, expression, xlab = '', ylab = '') +
+  ggtitle("Cluster plot, centers = 3", subtitle = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, margin = margin(b = -10)))
+
+
+
+### 2) Clustering jerarquico divisivo
+
+library(ggplot2) 
+library(factoextra)
+library(cluster)
+
+#### Implementación del clustering divisivo
+diana_euclidean <- diana(expression, metric = "euclidean", stand = FALSE) 
+
+colors <- rainbow(5)
+clust_diana_euclidean <- fviz_dend(diana_euclidean, 
+                                   cex = 0.5, 
+                                   k = 5,
+                                   palette = colors, 
+                                   main = 'Euclidean',
+                                   xlab = "Índice de Observaciones",
+                                   ylab = "Distancia") + 
+  theme_classic()
+
+
+print(clust_diana_euclidean)
