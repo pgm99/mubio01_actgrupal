@@ -1,1 +1,275 @@
+# Preparación del Entorno
+Se instalan y cargan las bibliotecas necesarias para realizar el análisis de datos.
 
+```{r}
+library(dplyr)
+library(stats)
+library(Rtsne) 
+library(uwot) 
+library(factoextra)
+library(dplyr) 
+set.seed(1234)
+library(e1071)
+library(caret)
+library(ggplot2)
+library(cluster)
+library(randomForest)
+library(MLmetrics)
+```
+# Carga de datos y preprocesamiento
+```{r}
+rm(list = ls())  # Limpiar entorno
+path <- "C:/Users/carlo/OneDrive/Master bioinformatica/IA/Ejercicio3"
+
+# Cargar los archivos
+expression <- read.csv(file = paste0(path,"/gene_expression.csv"), sep = ";", header = FALSE)
+genes <- read.csv(file = paste0(path,"/column_names.txt"), header = FALSE)
+samples <- read.csv(file = paste0(path,"/classes.csv"), sep = ";", header = FALSE)
+
+# Asignar nombres de columnas y organizar datos
+colnames(expression) <- genes$V1
+expression$class <- samples$V2
+expression <- expression[, c(501, 1:500)]  # Mover class a la primera columna
+rownames(expression) <- samples$V1
+expression$class <- as.factor(expression$class)
+
+# Imputación de valores NA con la media de cada columna
+expression <- expression %>%
+  mutate_if(is.numeric, ~ifelse(is.na(.), mean(., na.rm = TRUE), .))
+
+#Eliminar los genes con varianza = 0
+variances <- apply(expression[, -2], 2, var)
+genes_to_remove <-which(variances==0)
+col_genes_to_remove <- colnames(expression)[genes_to_remove + 1]  
+expression_rf <- expression %>%
+  select(-all_of(col_genes_to_remove))
+```
+#Métodos de aprendizaje no supervisado
+##Reducción de dimensionalidad 
+###t-SNE y UMAP
+Para reducir la dimensionalidad y visualizar los datos de expresión genética, se han utilizado t-SNE y UMAP, dos métodos que permiten representar la información en un espacio de menor dimensión manteniendo relaciones entre muestras.
+
+t-SNE se ha empleado para destacar agrupaciones locales dentro de los datos, priorizando la proximidad entre puntos similares. Es útil para identificar patrones y posibles clústeres dentro de las clases.
+
+Por otro lado, UMAP ofrece una representación más estructurada, preservando tanto relaciones cercanas como la estructura global del conjunto de datos. Su configuración permite ajustar la distancia mínima entre puntos (min_dist = 0.5), lo que facilita la observación sin forzar agrupaciones artificiales.
+
+Ambas técnicas se complementan: t-SNE ayuda a detectar subgrupos dentro de las muestras, mientras que UMAP proporciona una visión más amplia de las relaciones entre ellas. Esto permite evaluar si las clases están bien diferenciadas o si hay solapamientos entre los grupos.
+```{r}
+#Realizamos una reducción de dimensionalidad t-SNE y almacenamos los resultados en un dataframe
+tsne_result <- data.frame(Rtsne(sapply(expression, as.numeric))$Y) 
+
+#Representamos los resultados del t-SNE en un gráfico para observar las muestras y sus clases
+ggplot(tsne_result, aes(x = X1, y = X2, color = expression$class)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("red", "blue", "green", "orange", "purple")) +
+  labs(title = "Reducción t-SNE", x = "tSNE1", y = "tSNE2", color = "Grupo") +
+  theme_classic() +
+  theme(plot.title=element_text(hjust=0.5, size = 18, face = "bold")) 
+
+
+####UMAP####
+
+#Realizamos una reducción de dimensionalidad UMAP y almacenamos los resultados en un dataframe. En este caso elegimos una distancia mínima de 0.5
+#para no forzar clústers y poder observar todas las muestras en su conjunto
+umap.results <- umap(expression, n_neighbors = 0.2*length(expression), n_components = 2, min_dist = 0.5, local_connectivity = 1) 
+umap.df <- data.frame(umap.results) 
+
+#Realizamos un gráfico para observar los resultados del UMAP
+ggplot(umap.df, aes(x = X1, y = X2, color = expression$class)) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("red", "blue", "green", "orange", "purple")) +
+  labs(title = "UMAP reduction", x = 'dim1', y = 'dim2', color = "Grupo") +
+  theme_classic() +
+  theme(plot.title=element_text(hjust=0.5)) 
+
+
+```
+Los gráficos de t-SNE y UMAP muestran una clara separación entre las clases, lo que indica que los datos tienen una estructura bien diferenciada. t-SNE resalta mejor las agrupaciones locales, mientras que UMAP conserva mejor la estructura global. Sin embargo, en ambos casos se observa cierta superposición de la clase HPB con otras, lo que podría explicar los errores en su clasificación.
+
+##Clusterización
+###Clustering no jerárquico con kmeans y Clustering jerarquico divisivo
+
+```{r}
+### 1) Clustering no jerárquico con kmeans
+
+####Tenemos columnas donde todos los valores son iguales, lo que hace que la estandarización falle.
+expression <- expression[sapply(expression, is.numeric)]
+####Por ello:
+#### Detectar columnas constantes o con varianza cero
+zero_var_cols <- sapply(expression, function(col) var(col, na.rm = TRUE) == 0)
+#### Ver cuántas columnas tienen varianza cero
+sum(zero_var_cols)
+#### Eliminar columnas constantes
+expression <- expression[, !zero_var_cols]
+#### Escalar el dataset
+expression <- scale(expression)
+#### Verificar si hay valores faltantes
+sum(is.na(expression))
+
+
+#####CÓMO SABER CUANTOS CENTROIDES PONER
+##### n optimo de clusters
+fviz_nbclust(expression, kmeans, method = "wss") +
+  ggtitle("Optimal number of clusters", subtitle = "") +
+  theme_classic()
+
+#####Vemos que el número óptimo es 3
+
+kmeans.result <- kmeans(expression, centers = 3, iter.max = 100, nstart = 25) 
+
+####Representación
+fviz_cluster(kmeans.result, expression, xlab = '', ylab = '') +
+  ggtitle("Cluster plot, centers = 3", subtitle = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, margin = margin(b = -10)))
+
+### 2) Clustering jerarquico divisivo
+
+#### Implementación del clustering divisivo
+diana_euclidean <- diana(expression, metric = "euclidean", stand = FALSE) 
+
+colors <- rainbow(5)
+clust_diana_euclidean <- fviz_dend(diana_euclidean, 
+                                   cex = 0.5, 
+                                   k = 5,
+                                   palette = colors, 
+                                   main = 'Euclidean',
+                                   xlab = "Índice de Observaciones",
+                                   ylab = "Distancia") + 
+  theme_classic()
+
+
+print(clust_diana_euclidean)
+```
+
+
+#Métodos de aprendizaje supervisado
+
+## Modelo RDA
+Se ha seleccionado Regularized Discriminant Analysis (RDA) como modelo de clasificación debido a su capacidad para manejar datos con muchas variables y alta colinealidad, como ocurre en la expresión genética. RDA combina lo mejor de los enfoques lineales y cuadráticos, ajustando la regularización para mejorar la estabilidad y precisión en la clasificación.
+
+A diferencia de otros métodos, RDA permite adaptar la matriz de covarianza mediante dos parámetros (gamma y lambda), lo que evita problemas de sobreajuste y mejora la capacidad del modelo para distinguir entre clases cuando los datos son complejos.
+```{r}
+# División en datos de entrenamiento y prueba (80%-20%)
+set.seed(123)
+index <- createDataPartition(expression$class, p = 0.8, list = FALSE)
+train_data <- expression[index, ]
+test_data <- expression[-index, ]
+
+# Eliminar variables constantes antes de entrenar
+train_data <- train_data %>% select_if(~ !is.factor(.) && var(.) > 0)
+
+# Asegurar que `test_data` solo tenga las mismas columnas que `train_data`
+test_data <- test_data %>% select(all_of(colnames(train_data)))
+
+# Verificar que `class` sigue presente en los datos
+train_data$class <- expression$class[index]
+test_data$class <- expression$class[-index]
+
+# Convertir `train_data` y `test_data` en `data.frame()` con `class` como factor
+train_data <- as.data.frame(train_data)
+test_data <- as.data.frame(test_data)
+train_data$class <- as.factor(train_data$class)
+test_data$class <- as.factor(test_data$class)
+
+# Asegurar que los nombres de columnas sean válidos y coincidan en ambos conjuntos
+colnames(train_data) <- make.names(colnames(train_data), unique = TRUE)
+colnames(test_data) <- make.names(colnames(test_data), unique = TRUE)
+
+# Verificar si hay diferencias en los nombres de las columnas
+column_differences <- setdiff(colnames(train_data), colnames(test_data))
+if (length(column_differences) > 0) {
+  print("Diferencias en columnas entre train_data y test_data después de limpiar nombres:")
+  print(column_differences)
+}
+
+# Entrenar el modelo RDA
+rda_model <- rda(class ~ ., data = train_data, gamma = 0.1, lambda = 0.5)
+
+# Hacer predicciones en los datos de prueba
+rda_predictions <- predict(rda_model, newdata = test_data)$class
+
+# Evaluar el modelo con matriz de confusión y métricas
+rda_conf_matrix <- confusionMatrix(rda_predictions, test_data$class)
+print(rda_conf_matrix)
+
+# Extraer métricas de evaluación
+results <- data.frame(Model = "RDA",
+                      Accuracy = rda_conf_matrix$overall["Accuracy"],
+                      Kappa = rda_conf_matrix$overall["Kappa"],
+                      F1_Score = rda_conf_matrix$byClass["F1"])
+
+# Mostrar los resultados finales
+print(results)
+```
+El modelo ha mostrado una precisión del 92.44% y una alta concordancia entre predicciones y valores reales (Kappa = 0.9014). Aunque el rendimiento es sólido en la mayoría de las clases, se ha observado que la categoría HPB presenta más errores de clasificación, lo que podría mejorarse con ajustes en los hiperparámetros o técnicas de balanceo.
+
+En general, RDA ha sido elegido por su capacidad para ofrecer un equilibrio entre modelos simples y flexibles, logrando buenos resultados en este conjunto de datos.
+
+## Modelo knn
+
+```{r}
+#Dividir el conjunto de datos en entrenamiento y prueba
+set.seed(1995)
+train_index <- createDataPartition(expression_rf$class, p = 0.8, list = FALSE)
+train_expression <-expression_rf[train_index, ]
+test_expression <- expression_rf[-train_index, ]
+
+#Knn
+set.seed(1995)
+knnModel <-train(class ~.,
+                data = train_expression,
+                method = "knn",
+                trControl = trainControl(method = "cv", number = 10),
+                preProcess = c("center", "scale"),
+                tuneLength = 10)
+
+#Gráfico
+plot(knnModel)
+
+
+#Realizar predicciones en el conjunto de prueba
+predictions_knn <-predict(knnModel, newdata = test_expression)
+probabilities_knn <-predict(knnModel, newdata = test_expression, type= "prob" ) #Probablidad (necesaria para curva ROC)
+
+#Crear la matriz de confusión
+conf_matrix <- confusionMatrix(predictions_knn, test_expression$class)
+
+#Mostrar la matriz de confusión
+print(conf_matrix)
+```
+
+## Modelo RDA
+
+```{r}
+#Dividir el dataset en training y testing
+
+set.seed(1995)
+train_index <- createDataPartition(expression_rf$class, p = 0.8, list = FALSE) 
+train_index
+
+training_expression_rf <- expression_rf[train_index, ]
+testing_expression_rf <- expression_rf[-train_index, ]
+
+#Random forest
+rfModel <-train(class ~.,
+                data = training_expression_rf,
+                method = "rf",
+                trControl = trainControl(method = "cv", number = 10),
+                preProcess = c("center", "scale"),
+                tuneLength = 10
+
+varImp(rfModel)
+varImpPlot(rfModel$finalModel)
+
+predictions_rf <- predict(rfModel, newdata = testing_expression_rf, type = "raw") 
+predictions_rf
+
+confusionMatrix(predictions_rf, testing_expression$class)
+
+probabilities_rf <- predict(rfModel, newdata = testing_expression_rf, type = "prob")
+
+# Calcular el F1-Score
+f1_score <- F1_Score(y_pred = predictions_rf, y_true = testing_expression_rf$class, positive = NULL)
+print(f1_score)
+```
