@@ -4,6 +4,7 @@ Random Forest
 library(dplyr)
 library(randomForest)
 library(caret)
+library(MLmetrics)
 
 #Eliminar los genes con varianza = 0
 
@@ -28,4 +29,18 @@ rfModel <-train(class ~.,
                 method = "rf",
                 trControl = trainControl(method = "cv", number = 10),
                 preProcess = c("center", "scale"),
-                tuneLength = 10)
+                tuneLength = 10
+
+varImp(rfModel)
+varImpPlot(rfModel$finalModel)
+
+predictions_rf <- predict(rfModel, newdata = testing_expression_rf, type = "raw") 
+predictions_rf
+
+confusionMatrix(predictions_rf, testing_expression$class)
+
+probabilities_rf <- predict(rfModel, newdata = testing_expression_rf, type = "prob")
+
+# Calcular el F1-Score
+f1_score <- F1_Score(y_pred = predictions_rf, y_true = testing_expression_rf$class, positive = NULL)
+print(f1_score)
