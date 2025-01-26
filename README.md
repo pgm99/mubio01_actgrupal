@@ -1,4 +1,5 @@
-# mubio01_actgrupal
+# Actividad grupal Algoritmos de Inteligencia Artificial
+#### Participantes: Celia, Pablo, Maria, Elisabet y Carlos
 
 ## Análisis de un conjunto de datos de origen biológico mediante técnicas de machine learning supervisadas y no supervisadas
 
